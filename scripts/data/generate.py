@@ -143,8 +143,7 @@ def sign(image, label, classid):
     image[mask] = COLORS[classid].fill(numpy.count_nonzero(mask))
 
 
-# SIZE = (2048, 2448)
-SIZE = (256, 512)
+SIZE = (2048, 2448)
 ARTISTS = {
     0: background,
     1: vine,
@@ -208,7 +207,7 @@ if __name__ == "__main__":
         "-n", "--number",
         help="Number of fakes to generate.",
         type=int,
-        default=10,
+        default=1000,
     )
     args = parser.parse_args()
 
