@@ -190,7 +190,11 @@ def generate(number):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Path through obstacles")
+    parser = argparse.ArgumentParser(
+        description="Creates a series of fake, loosely grapevine-inspired"
+                    " images that we can use to test segmentors.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "-i", "--outimgs",
         help="Path to a directory where the generated images go.",
