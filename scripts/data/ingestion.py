@@ -1,5 +1,6 @@
 '''
-TODO
+Tool to take various label output formats I've been given and turn them into
+(H, W) label images with the pixel value being the class.
 '''
 
 import argparse
@@ -122,13 +123,17 @@ def hussain_json_label(image, json_file):
 
 
 def draw_polygon(image, classid, points, add_points=None):
+    points = numpy.array(points)
     altered = image.copy()
-    # TODO: Treat the ints better
-    points = numpy.array(points, dtype=int)
-    cv2.fillPoly(img=altered, pts=[points], color=classid)
+    # Add a few decimal points of sub-pixel accuracy, possible with fillPoly
+    SUBPIXEL = 4
+    subpixel_points = (points * 2**SUBPIXEL).astype(int)
+    cv2.fillPoly(img=altered, pts=[subpixel_points], color=classid, shift=SUBPIXEL)
     if add_points is not None:
-        altered[points.T[1], points.T[0]] = add_points
-        last = points[-1]
+        # int(x + 0.5) is a trick to round numbers to nearest int
+        int_points = (points + 0.5).astype(int)
+        altered[int_points.T[1], int_points.T[0]] = add_points
+        last = int_points[-1]
         altered[last[1]-2:last[1]+2, last[0]-2:last[0]+2] = add_points
     # Check that we haven't altered an existing real label
     already_mask = image > 0
@@ -208,7 +213,6 @@ def parse_args():
         description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    # TODO: How many input types will there be? Re-organize
     parser.add_argument(
         "-j", "--json-file",
         help="Polygonally labelled JSON file.",
