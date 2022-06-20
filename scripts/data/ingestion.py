@@ -27,47 +27,63 @@ def main(args):
 
     vis_image = None
     if args.file_type == "coco-json":
-        image = coco_label(image, args.input_file)
+        images = coco_label(image, args.json_file)
     elif args.file_type == "diffgram-json":
-        image, vis_image = diffgram_label(image, args.input_file)
+        images, vis_image = diffgram_label(image, args.json_file)
     elif args.file_type == "colored-img":
-        image = label_by_color(image, args.input_file,args.colors_file)
+        images = label_by_color(image, args.input_file,args.colors_file)
     elif args.file_type == "H-json":
-        image = h_json_label(image, args.input_file)
+        images = h_json_label(image, args.json_file)
     else:
         raise NotImplementedError()
 
-    # Make everything else background
-    image[image < 0] = 0
-    image = image.astype(numpy.uint8)
+    for name, image in images.items():
+        if name is None:
+            output_path = args.output_path
+        else:
+            output_path = args.output_path.parent.joinpath(name)
 
-    # Fill in known hand-labeled gaps. This is bad, but I tried hard and
-    # couldn't find a better way to handle self-intersections. Screw cv2's
-    # fillPoly and drawContour.
-    image = fill_known_gaps(args.input_file, image)
+        # Make everything else background
+        image[image < 0] = 0
+        image = image.astype(numpy.uint8)
 
-    # Save
-    cv2.imwrite(str(args.output_path), image)
+        # Fill in known hand-labeled gaps. This is bad, but I tried hard and
+        # couldn't find a better way to handle self-intersections. Screw cv2's
+        # fillPoly and drawContour.
+        image = fill_known_gaps(args.input_file, image)
 
-    # Then make a debug version
-    if vis_image is None:
-        vis_image = image
-    pyplot.imsave(str(args.output_path).replace(".png", "_vis.png"), vis_image)
+        # Save
+        cv2.imwrite(str(output_path), image)
+
+        # Then make a debug version
+        if vis_image is None or name is not None:
+            vis_image = image
+        pyplot.imsave(str(output_path).replace(".png", "_vis.png"), vis_image)
 
 
 def coco_label(image, json_file):
     '''Process files as they come out of CVAT using the COCO format.'''
     labeldata = json.load(json_file.open("r"))
     annotations = labeldata["annotations"]
-    for annotation in annotations:
-        classid = annotation["category_id"]
-        image = draw_polygon(
-            image,
-            classid,
-            # (x, y) points all come out interleaved as [x1, y1, x2, y2, ...]
-            numpy.array(annotation["segmentation"]).reshape((-1, 2)),
-        )
-    return image
+    output = {}
+    for image_meta in sorted(labeldata["images"], key=lambda x: x["id"]):
+        copied = numpy.ones(image.shape, dtype=image.dtype) * -1
+        image_id = image_meta["id"]
+        image_name = image_meta["file_name"]
+        for annotation in annotations:
+            if annotation["image_id"] != image_id:
+                continue
+            import ipdb; ipdb.set_trace()
+            classid = annotation["category_id"]
+            copied = draw_polygon(
+                copied,
+                classid,
+                # (x, y) points all come out interleaved as [x1, y1, x2, y2, ...]
+                numpy.array(annotation["segmentation"]).reshape((-1, 2)),
+            )
+        output[image_name] = copied
+    # import ipdb; ipdb.set_trace()
+    return output
 
 
 # This is horrible, but for the first diffgram export I had to manually go
@@ -113,7 +129,7 @@ def diffgram_label(image, json_file):
                     vis_image = draw_polygon(vis_image, classid, subset, add_points=vis_value)
             else:
                 discover_subsets(points)
-    return image, vis_image
+    return {None: image}, vis_image
 
 
 def h_json_label(image, json_file):
@@ -126,7 +142,7 @@ def h_json_label(image, json_file):
         assert shape["shape_type"] == "polygon"
         classid = CLASSES[shape["label"].lower()]
         image = draw_polygon(image, classid, shape["points"])
-    return image
+    return {None: image}
 
 
 def label_by_color(image, ann_img_path, colors_file):
@@ -149,7 +165,7 @@ def label_by_color(image, ann_img_path, colors_file):
         mask = (ann_img == color).all(axis=2)
         image[mask] = CLASSES[classname]
 
-    return image
+    return {None: image}
 
 
 def draw_polygon(image, classid, points, add_points=None):
