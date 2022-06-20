@@ -27,11 +27,13 @@ def main(args):
 
     vis_image = None
     if args.file_type == "coco-json":
-        image = coco_label(image, args.json_file)
+        image = coco_label(image, args.input_file)
     elif args.file_type == "diffgram-json":
-        image, vis_image = diffgram_label(image, args.json_file)
-    elif args.file_type == "hussain-json":
-        image = hussain_json_label(image, args.json_file)
+        image, vis_image = diffgram_label(image, args.input_file)
+    elif args.file_type == "colored-img":
+        image = label_by_color(image, args.input_file,args.colors_file)
+    elif args.file_type == "H-json":
+        image = h_json_label(image, args.input_file)
     else:
         raise NotImplementedError()
 
@@ -108,10 +110,9 @@ def diffgram_label(image, json_file):
     return image, vis_image
 
 
-def hussain_json_label(image, json_file):
+def h_json_label(image, json_file):
     '''
-    Process the json files as they come out of whatever Hussain shared with me
-    first.
+    Process the json files as they come out of whatever H shared with me first.
     '''
     labeldata = json.load(json_file.open("r"))
     shapes = labeldata["shapes"]
@@ -119,6 +120,29 @@ def hussain_json_label(image, json_file):
         assert shape["shape_type"] == "polygon"
         classid = CLASSES[shape["label"].lower()]
         image = draw_polygon(image, classid, shape["points"])
+    return image
+
+
+def label_by_color(image, ann_img_path, colors_file):
+
+    # Read in the colors
+    colors = {}
+    with open(colors_file, "r") as infile:
+        for line in infile.readlines():
+            # This looks complicated, but it just takes
+            # 147 203 131 Leaf
+            # and turns it into
+            # {(147, 203, 131): "leaf"}
+            colors[tuple(map(int, line.split()[:3]))] = line.split()[-1].lower()
+
+    # And the annotated image
+    ann_img = cv2.cvtColor(cv2.imread(str(ann_img_path)), cv2.COLOR_BGR2RGB)
+
+    # Figure out which parts of the annotated image go with which color/class
+    for color, classname in colors.items():
+        mask = (ann_img == color).all(axis=2)
+        image[mask] = CLASSES[classname]
+
     return image
 
 
@@ -214,8 +238,14 @@ def parse_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument(
-        "-j", "--json-file",
-        help="Polygonally labelled JSON file.",
+        "-c", "--colors-file",
+        help="Furqan's images come with an associated color file.",
+        type=Path,
+    )
+    parser.add_argument(
+        "-i", "--input-file",
+        help="Polygonally labelled JSON file or color labeled images, depending"
+             " on the file type.",
         required=True,
         type=Path,
     )
@@ -229,7 +259,7 @@ def parse_args():
         "-t", "--file-type",
         help="Choose from a limited set of options for ingestible filetypes.",
         required=True,
-        choices=["coco-json", "diffgram-json", "hussain-json"],
+        choices=["coco-json", "diffgram-json", "colored-img", "H-json"],
     )
     return parser.parse_args()
 
