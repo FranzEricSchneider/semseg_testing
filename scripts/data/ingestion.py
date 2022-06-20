@@ -27,13 +27,13 @@ def main(args):
 
     vis_image = None
     if args.file_type == "coco-json":
-        images = coco_label(image, args.json_file)
+        images = coco_label(image, args.input_file)
     elif args.file_type == "diffgram-json":
-        images, vis_image = diffgram_label(image, args.json_file)
+        images, vis_image = diffgram_label(image, args.input_file)
     elif args.file_type == "colored-img":
-        images = label_by_color(image, args.input_file,args.colors_file)
+        images = label_by_color(image, args.input_file, args.colors_file)
     elif args.file_type == "H-json":
-        images = h_json_label(image, args.json_file)
+        images = h_json_label(image, args.input_file)
     else:
         raise NotImplementedError()
 
@@ -54,6 +54,7 @@ def main(args):
 
         # Save
         cv2.imwrite(str(output_path), image)
+        print(f"Saved to {str(output_path)}")
 
         # Then make a debug version
         if vis_image is None or name is not None:
@@ -66,6 +67,11 @@ def coco_label(image, json_file):
     labeldata = json.load(json_file.open("r"))
     annotations = labeldata["annotations"]
     output = {}
+    # So there's this annoying happened where the labels from two images got
+    # mashed together and written over each other. This "seen" set is used to
+    # check that we aren't adding sets of points twice. I don't know if this
+    # issue will ever arise again.
+    seen = set()
     for image_meta in sorted(labeldata["images"], key=lambda x: x["id"]):
         copied = numpy.ones(image.shape, dtype=image.dtype) * -1
         image_id = image_meta["id"]
@@ -73,16 +79,21 @@ def coco_label(image, json_file):
         for annotation in annotations:
             if annotation["image_id"] != image_id:
                 continue
-            import ipdb; ipdb.set_trace()
+
+            segmentation = numpy.array(annotation["segmentation"])
+            if str(segmentation) in seen:
+                continue
+            seen.add(str(segmentation))
+
             classid = annotation["category_id"]
             copied = draw_polygon(
                 copied,
                 classid,
-                # (x, y) points all come out interleaved as [x1, y1, x2, y2, ...]
-                numpy.array(annotation["segmentation"]).reshape((-1, 2)),
+                # (x, y) points come out interleaved as [x1, y1, x2, y2, ...]
+                # and need to be reshaped into (N, 2)
+                segmentation.reshape((-1, 2)),
             )
         output[image_name] = copied
-    # import ipdb; ipdb.set_trace()
     return output
 
 
