@@ -39,8 +39,14 @@ def main(args):
 
     # Make everything else background
     image[image < 0] = 0
-    # And save
     image = image.astype(numpy.uint8)
+
+    # Fill in known hand-labeled gaps. This is bad, but I tried hard and
+    # couldn't find a better way to handle self-intersections. Screw cv2's
+    # fillPoly and drawContour.
+    image = fill_known_gaps(args.input_file, image)
+
+    # Save
     cv2.imwrite(str(args.output_path), image)
 
     # Then make a debug version
@@ -153,17 +159,47 @@ def draw_polygon(image, classid, points, add_points=None):
     SUBPIXEL = 4
     subpixel_points = (points * 2**SUBPIXEL).astype(int)
     cv2.fillPoly(img=altered, pts=[subpixel_points], color=classid, shift=SUBPIXEL)
+
     if add_points is not None:
         # int(x + 0.5) is a trick to round numbers to nearest int
         int_points = (points + 0.5).astype(int)
         altered[int_points.T[1], int_points.T[0]] = add_points
         last = int_points[-1]
         altered[last[1]-2:last[1]+2, last[0]-2:last[0]+2] = add_points
+
     # Check that we haven't altered an existing real label
+    # TODO: Make this check relevant again
     already_mask = image > 0
     # assert numpy.all(image[already_mask] == altered[already_mask])
     # Then update our understanding
     return altered
+
+
+# Build up a list of files and the pixel values that we want to floodfill.
+# Let's assume for now that we will only do this for vines. Values extracted
+# using pinta.
+KNOWN_FILL = {
+    "2021-12-01-12-36-30_cam1_6_COCO.json": [(926, 596), (175, 508), (1555, 912), (1080, 1130), (993, 1236), (880, 1258), (836, 1285), (986, 963), (1128, 1014), (1617, 1920), (1363, 450), (1780, 285)],
+    "2021-12-01-13-11-13_cam2_0_COCO.json": [(382, 496), (408, 500), (386, 413), (378, 423), (684, 371), (1317, 37), (1305, 234), (1231, 272), (1177, 303), (1605, 908), (1634, 940), (1556, 248), (1969, 986), (1990, 1069), (2183, 163), (1956, 1763), (2055, 338), (1334, 613), (1360, 638), (2157, 1170), (1270, 1101)],
+    "2021-12-01-13-31-15_cam3_6_COCO.json": [(622, 925), (667, 924), (406, 314), (1721, 993)],
+    "2021-12-01-15-16-07_cam1_6_COCO.json": [(217, 1580), (345, 1087), (1112, 1200), (1022, 278), (1077, 391), (1150, 438), (1200, 420), (1220, 435), (2092, 1233), (2291, 724), (2319, 732), (2308, 730)],
+    "2021-12-01-15-17-19_cam0_1_COCO.json": [(863, 265), (763, 1423), (860, 1169), (881, 1147), (889, 1037), (911, 768), (975, 720), (1061, 458), (913, 893), (1186, 112), (1456, 53), (1452, 91), (1812, 350), (994, 198), (2060, 378), (1016, 761), (1845, 800), (1814, 812), (1634, 858), (1597, 869), (927, 960), (1529, 1158), (1740, 1175), (1740, 1185), (1579, 1223), (1746, 1343), (1851, 1653)],
+    "2021-12-01-15-18-31_cam2_0_JSON.json": [(592, 42), (2250, 54), (1388, 64), (1150, 164), (815, 217), (1271, 328), (274, 522), (361, 537), (1030, 600), (1758, 744), (1744, 786), (1179, 796), (1732, 830), (428, 1102), (477, 1116), (623, 1137), (636, 1161), (661, 1165), (397, 1374), (1073, 1594)],
+    "2021-12-01-16-27-46_cam2_3_JSON.json": [(511, 146), (1876, 344), (1954, 348), (1900, 350), (1920, 350), (340, 402), (332, 432), (1524, 448), (1734, 518), (2138, 572), (1043, 764), (91, 770), (874, 786), (2215, 848), (1056, 850), (40, 874), (110, 877), (2056, 955), (1070, 968), (1093, 982), (2009, 1032), (440, 1081), (246, 1373)],
+    "2021-12-01-16-50-01_cam1_1_JSON.json": [(829, 77), (1382, 154), (1854, 160), (712, 162), (608, 178), (227, 292), (869, 338), (659, 408), (1108, 469), (1378, 477), (1353, 504), (991, 518), (1361, 550), (394, 560), (1399, 588), (50, 625), (2196, 660), (933, 729), (912, 799), (913, 1004), (916, 1130), (783, 1236), (803, 1272), (836, 1366)],
+}
+
+
+def fill_known_gaps(input_file, image):
+    if input_file.name in KNOWN_FILL:
+        for pixel in KNOWN_FILL[input_file.name]:
+            assert image[pixel[1], pixel[0]] == 0, f"Pixel {pixel} != 0..."
+            height, width = image.shape
+            cv2.floodFill(image,
+                          numpy.zeros((height+2, width+2), numpy.uint8),
+                          pixel,
+                          CLASSES["vine"])
+    return image
 
 
 def get_point_subsets(points, cuts):
