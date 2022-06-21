@@ -75,7 +75,11 @@ def coco_label(image, json_file):
     for image_meta in sorted(labeldata["images"], key=lambda x: x["id"]):
         copied = numpy.ones(image.shape, dtype=image.dtype) * -1
         image_id = image_meta["id"]
-        image_name = image_meta["file_name"]
+        image_name = image_meta["file_name"].split("/")[-1]
+        # This is a bit messy, but in the case where the label file only has
+        # one image, don't use the image_name to distinguish them.
+        if len(labeldata["images"]) == 1:
+            image_name = None
         for annotation in annotations:
             if annotation["image_id"] != image_id:
                 continue
@@ -194,10 +198,15 @@ def draw_polygon(image, classid, points, add_points=None):
         last = int_points[-1]
         altered[last[1]-2:last[1]+2, last[0]-2:last[0]+2] = add_points
 
-    # Check that we haven't altered an existing real label
-    # TODO: Make this check relevant again
-    already_mask = image > 0
-    # assert numpy.all(image[already_mask] == altered[already_mask])
+    # This is a little complicated, but basically we want to keep the lowest
+    # numbered classes that are not the background. Basically we want to
+    # prioritize vines if there is overlap (class 1). This is not 100% right
+    # but it's the best choice.
+    already_set = image > 0
+    unequal = image != altered
+    mask = numpy.logical_and(already_set, unequal)
+    altered[mask] = numpy.min((altered[mask], image[mask]), axis=0)
+
     # Then update our understanding
     return altered
 
