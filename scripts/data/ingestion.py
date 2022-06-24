@@ -34,6 +34,8 @@ def main(args):
         images = label_by_color(image, args.input_file, args.colors_file)
     elif args.file_type == "H-json":
         images = h_json_label(image, args.input_file)
+    elif args.file_type == "F-json":
+        images = f_json_label(image, args.input_file)
     else:
         raise NotImplementedError()
 
@@ -161,6 +163,27 @@ def h_json_label(image, json_file):
         assert shape["shape_type"] == "polygon"
         classid = CLASSES[shape["label"].lower()]
         image = draw_polygon(image, classid, shape["points"])
+    return {None: image}
+
+
+def f_json_label(image, json_file):
+    '''
+    Process the json files as they come out of whatever F shared with me when
+    CVAT stopped working.
+    '''
+    labeldata = json.load(json_file.open("r"))
+    instances = labeldata["instances"]
+    for instance in instances:
+        assert instance["type"] == "polygon"
+        classid = CLASSES[instance["className"].lower()]
+        points = numpy.array(instance["points"]).squeeze()
+        image = draw_polygon(
+            image,
+            classid,
+            # (x, y) points come out interleaved as [x1, y1, x2, y2, ...]
+            # and need to be reshaped into (N, 2)
+            points.reshape((-1, 2)),
+        )
     return {None: image}
 
 
@@ -351,7 +374,7 @@ def parse_args():
         "-t", "--file-type",
         help="Choose from a limited set of options for ingestible filetypes.",
         required=True,
-        choices=["coco-json", "diffgram-json", "colored-img", "H-json"],
+        choices=["coco-json", "diffgram-json", "colored-img", "H-json", "F-json"],
     )
     return parser.parse_args()
 
