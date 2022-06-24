@@ -72,6 +72,8 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+    for directory in (args.annotations_dir, args.img_dir, args.output_dir):
+        assert directory.is_dir(), f"{directory} was not findable"
     main(anndir=args.annotations_dir,
          imgdir=args.img_dir,
          out=args.output_dir)

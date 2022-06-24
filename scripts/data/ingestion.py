@@ -61,6 +61,7 @@ def main(args):
         # Then make a debug version
         if vis_image is None or name is not None:
             vis_image = image
+        vis_image[0, 0] = len(CLASSES)
         pyplot.imsave(str(output_path).replace(".png", "_vis.png"), vis_image)
 
 
