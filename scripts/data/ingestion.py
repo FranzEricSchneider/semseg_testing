@@ -315,7 +315,7 @@ def parse_args():
     )
     parser.add_argument(
         "-c", "--colors-file",
-        help="Furqan's images come with an associated color file.",
+        help="F's images come with an associated color file.",
         type=Path,
     )
     parser.add_argument(
